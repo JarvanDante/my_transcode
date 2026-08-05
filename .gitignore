@@ -1,0 +1,26 @@
+# Binaries
+/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local config / secrets
+configs/config.yaml
+.env
+.env.*
+
+# Go
+/vendor/
+*.test
+coverage.out
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Transcode temp
+/tmp/
+*.mp4
+!testdata/**

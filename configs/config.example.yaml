@@ -1,0 +1,39 @@
+# 复制为 config.yaml 后按本地环境修改
+# cp configs/config.example.yaml configs/config.yaml
+
+http:
+  addr: ":8088"
+
+# 工作目录：下载原片 / ffmpeg 输出临时文件
+workDir: "/tmp/my_transcode"
+
+kafka:
+  enabled: false # 第 5 步再开
+  brokers:
+    - "127.0.0.1:9092"
+  groupId: "my_transcode"
+  jobTopic: "media.transcode.jobs"
+  resultTopic: "media.transcode.results"
+
+minio:
+  enabled: false # 第 4 步再开
+  endpoint: "127.0.0.1:19000"
+  accessKey: "minioadmin"
+  secretKey: "minioadmin123"
+  useSSL: false
+  # 默认桶；任务里也可覆盖
+  bucket: "my-media"
+  publicURL: "http://127.0.0.1:19000"
+
+ffmpeg:
+  bin: "ffmpeg"
+  # 第一期：单档 H.264 + HLS
+  profile: "h264_hls"
+  # veryfast 优先速度；上线可改为 medium
+  preset: "veryfast"
+  crf: 23
+  hlsTime: 6
+
+# 本地调试：允许 POST /debug/jobs（生产务必 false）
+debug:
+  allowSubmit: true
