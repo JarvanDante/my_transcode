@@ -71,12 +71,11 @@ curl http://127.0.0.1:8088/healthz
 
 ## 分步落地
 
-1. ~~协议 + 目录骨架~~（当前）
-2. 本机 `scripts/transcode_local.sh` 跑通 HLS
-3. 容器 `/healthz` 起来（Dockerfile）
-4. 接通 MinIO 下载/上传 + `POST /debug/jobs`
-5. 接通 Kafka 消费/产出
-6. `my_service` 加 `play_url` / `transcode_status` 并联调
+1. ~~协议 + 目录骨架~~
+2. ~~本机 `scripts/transcode_local.sh` 跑通 HLS~~
+3. ~~接通 MinIO / Kafka + `/healthz` 区分开关与连通~~（当前）
+4. `POST /debug/jobs` 端到端联调（上传原片→转码→回写结果）
+5. `my_service` 加 `play_url` / `transcode_status` 并联调
 
 ## 配置对齐 my_service 本地
 

@@ -24,7 +24,6 @@ func main() {
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		// 允许直接用 example 启动骨架
 		log.Printf("load %s failed: %v; fallback to config.example.yaml", *cfgPath, err)
 		cfg, err = config.Load("configs/config.example.yaml")
 		if err != nil {
@@ -36,9 +35,32 @@ func main() {
 		log.Fatalf("workDir: %v", err)
 	}
 
-	store := minio.New(cfg.Minio)
+	store, err := minio.New(cfg.Minio)
+	if err != nil {
+		log.Fatalf("minio: %v", err)
+	}
+	if store.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := store.EnsureBucket(ctx, cfg.Minio.Bucket); err != nil {
+			log.Printf("warn: ensure bucket %s: %v", cfg.Minio.Bucket, err)
+		} else {
+			log.Printf("minio: bucket ready %s", cfg.Minio.Bucket)
+		}
+		cancel()
+	}
+
 	ff := ffmpeg.New(cfg.FFmpeg)
 	bus := kafka.New(cfg.Kafka)
+	defer bus.Close()
+	if bus.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		if err := bus.EnsureTopics(ctx); err != nil {
+			log.Printf("warn: ensure kafka topics: %v", err)
+		} else {
+			log.Printf("kafka: topics ready")
+		}
+		cancel()
+	}
 	runner := job.New(cfg, store, ff, bus)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -50,7 +72,7 @@ func main() {
 		}
 	}()
 
-	srv := httpapi.New(cfg, runner)
+	srv := httpapi.New(cfg, runner, store, bus)
 	httpSrv := &http.Server{Addr: cfg.HTTP.Addr, Handler: srv.Engine()}
 	go func() {
 		log.Printf("http listen %s (healthz /healthz)", cfg.HTTP.Addr)

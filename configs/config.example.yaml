@@ -8,7 +8,7 @@ http:
 workDir: "/tmp/my_transcode"
 
 kafka:
-  enabled: false # 第 5 步再开
+  enabled: true
   brokers:
     - "127.0.0.1:9092"
   groupId: "my_transcode"
@@ -16,7 +16,7 @@ kafka:
   resultTopic: "media.transcode.results"
 
 minio:
-  enabled: false # 第 4 步再开
+  enabled: true
   endpoint: "127.0.0.1:19000"
   accessKey: "minioadmin"
   secretKey: "minioadmin123"

@@ -9,21 +9,31 @@ import (
 
 	"my_transcode/internal/config"
 	"my_transcode/internal/job"
+	"my_transcode/internal/kafka"
+	"my_transcode/internal/minio"
 	"my_transcode/internal/protocol"
 )
+
+type DepStatus struct {
+	Enabled   bool   `json:"enabled"`
+	Connected bool   `json:"connected"`
+	Error     string `json:"error,omitempty"`
+}
 
 type Server struct {
 	cfg    *config.Config
 	runner *job.Runner
+	store  *minio.Client
+	bus    *kafka.Bus
 	engine *gin.Engine
 }
 
-func New(cfg *config.Config, runner *job.Runner) *Server {
+func New(cfg *config.Config, runner *job.Runner, store *minio.Client, bus *kafka.Bus) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery(), gin.Logger())
 
-	s := &Server{cfg: cfg, runner: runner, engine: r}
+	s := &Server{cfg: cfg, runner: runner, store: store, bus: bus, engine: r}
 	r.GET("/healthz", s.healthz)
 	if cfg.Debug.AllowSubmit {
 		r.POST("/debug/jobs", s.debugJob)
@@ -34,13 +44,68 @@ func New(cfg *config.Config, runner *job.Runner) *Server {
 func (s *Server) Engine() *gin.Engine { return s.engine }
 
 func (s *Server) healthz(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"ok":      true,
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Second)
+	defer cancel()
+
+	minioSt := s.checkMinio(ctx)
+	kafkaSt := s.checkKafka(ctx)
+
+	// 进程存活；ready=所有已开启依赖都连通
+	ready := true
+	if minioSt.Enabled && !minioSt.Connected {
+		ready = false
+	}
+	if kafkaSt.Enabled && !kafkaSt.Connected {
+		ready = false
+	}
+
+	status := http.StatusOK
+	if !ready {
+		status = http.StatusServiceUnavailable
+	}
+
+	c.JSON(status, gin.H{
+		"ok":      true, // 进程存活
+		"ready":   ready,
 		"service": "my_transcode",
 		"time":    time.Now().Format(time.RFC3339),
-		"kafka":   s.cfg.Kafka.Enabled,
-		"minio":   s.cfg.Minio.Enabled,
+		"minio":   minioSt,
+		"kafka":   kafkaSt,
 	})
+}
+
+func (s *Server) checkMinio(ctx context.Context) DepStatus {
+	st := DepStatus{Enabled: s.cfg.Minio.Enabled}
+	if !st.Enabled {
+		return st
+	}
+	if s.store == nil {
+		st.Error = "client nil"
+		return st
+	}
+	if err := s.store.Ping(ctx); err != nil {
+		st.Error = err.Error()
+		return st
+	}
+	st.Connected = true
+	return st
+}
+
+func (s *Server) checkKafka(ctx context.Context) DepStatus {
+	st := DepStatus{Enabled: s.cfg.Kafka.Enabled}
+	if !st.Enabled {
+		return st
+	}
+	if s.bus == nil {
+		st.Error = "client nil"
+		return st
+	}
+	if err := s.bus.Ping(ctx); err != nil {
+		st.Error = err.Error()
+		return st
+	}
+	st.Connected = true
+	return st
 }
 
 // debugJob 本地联调：直接投递一条 JobMessage（异步执行）
