@@ -100,6 +100,10 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 	if err := r.store.Download(ctx, bucketIn, job.Input.Key, inFile); err != nil {
 		return err
 	}
+	if dur := r.ff.DurationSec(ctx, inFile); dur > 0 {
+		result.DurationSec = dur
+		log.Printf("job id=%s duration_sec=%d", job.JobID, dur)
+	}
 	if err := r.ff.ToHLS(ctx, inFile, outDir); err != nil {
 		return err
 	}

@@ -14,12 +14,15 @@
 | 产出结果消息 | 多业务域逻辑 |
 
 ```text
-my_service                         Kafka                          my_transcode
-──────────                         ─────                          ────────────
-保存原片 source_*
-发 JobMessage  ─────────────────► media.transcode.jobs ─────────► 下载→ffmpeg→上传
-更新 play_url / status ◄──────── media.transcode.results ◄────── ResultMessage
+my_media（媒资中心）               Kafka                          my_transcode
+──────────────────               ─────                          ────────────
+预签名上传原片 → MinIO
+发 JobMessage  ─────────────────► media.transcode.jobs ─────────► 下载→ffprobe→ffmpeg→上传 HLS
+回写 status/play_url/duration ◄─ media.transcode.results ◄────── ResultMessage
 ```
+
+已验收端到端链路：`上传 → Kafka → my_transcode → HLS → 详情 ready → 浏览器播 play_url`  
+详见 sibling 仓 [`my_media/docs/m1-pipeline.md`](../my_media/docs/m1-pipeline.md)。
 
 协议详见 [docs/protocol.md](docs/protocol.md)。
 

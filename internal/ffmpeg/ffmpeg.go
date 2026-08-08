@@ -1,11 +1,15 @@
 package ffmpeg
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"my_transcode/internal/config"
 )
@@ -17,6 +21,43 @@ type Transcoder struct {
 
 func New(cfg config.FFmpegConfig) *Transcoder {
 	return &Transcoder{cfg: cfg}
+}
+
+func (t *Transcoder) probeBin() string {
+	bin := t.cfg.Bin
+	if bin == "" || bin == "ffmpeg" {
+		return "ffprobe"
+	}
+	if strings.HasSuffix(bin, "ffmpeg") {
+		return strings.TrimSuffix(bin, "ffmpeg") + "ffprobe"
+	}
+	return "ffprobe"
+}
+
+// DurationSec 用 ffprobe 读取媒体时长(秒, 四舍五入)。失败返回 0。
+func (t *Transcoder) DurationSec(ctx context.Context, inputFile string) int {
+	args := []string{
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		inputFile,
+	}
+	cmd := exec.CommandContext(ctx, t.probeBin(), args...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return 0
+	}
+	s := strings.TrimSpace(out.String())
+	if s == "" {
+		return 0
+	}
+	sec, err := strconv.ParseFloat(s, 64)
+	if err != nil || sec <= 0 {
+		return 0
+	}
+	return int(math.Round(sec))
 }
 
 // ToHLS 将 inputFile 转为 outDir/index.m3u8 + ts
