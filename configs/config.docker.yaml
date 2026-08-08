@@ -32,6 +32,7 @@ ffmpeg:
   preset: "veryfast"
   crf: 23
   hlsTime: 6
+  coverSeekSec: 8
 
 debug:
   allowSubmit: false

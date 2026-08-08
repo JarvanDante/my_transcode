@@ -39,11 +39,12 @@ type MinioConfig struct {
 }
 
 type FFmpegConfig struct {
-	Bin     string `yaml:"bin"`
-	Profile string `yaml:"profile"`
-	Preset  string `yaml:"preset"`
-	CRF     int    `yaml:"crf"`
-	HLSTime int    `yaml:"hlsTime"`
+	Bin          string `yaml:"bin"`
+	Profile      string `yaml:"profile"`
+	Preset       string `yaml:"preset"`
+	CRF          int    `yaml:"crf"`
+	HLSTime      int    `yaml:"hlsTime"`
+	CoverSeekSec int    `yaml:"coverSeekSec"` // 封面默认截取秒数
 }
 
 type DebugConfig struct {
@@ -76,6 +77,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.FFmpeg.HLSTime == 0 {
 		c.FFmpeg.HLSTime = 6
+	}
+	if c.FFmpeg.CoverSeekSec <= 0 {
+		c.FFmpeg.CoverSeekSec = 8
 	}
 	return &c, nil
 }

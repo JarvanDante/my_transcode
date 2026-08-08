@@ -33,6 +33,7 @@ ffmpeg:
   preset: "veryfast"
   crf: 23
   hlsTime: 6
+  coverSeekSec: 8
 
 # 本地调试：允许 POST /debug/jobs（生产务必 false）
 debug:

@@ -107,6 +107,24 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 	if err := r.ff.ToHLS(ctx, inFile, outDir); err != nil {
 		return err
 	}
+
+	seek := job.CoverSeekSec
+	if seek <= 0 {
+		seek = r.cfg.FFmpeg.CoverSeekSec
+	}
+	if seek < 0 {
+		seek = 0
+	}
+	if result.DurationSec > 0 && seek >= result.DurationSec {
+		seek = result.DurationSec / 2
+	}
+	coverFile := filepath.Join(outDir, "cover.jpg")
+	if err := r.ff.ExtractCover(ctx, inFile, coverFile, seek); err != nil {
+		log.Printf("job id=%s cover extract failed seek=%d: %v (continue without cover)", job.JobID, seek, err)
+	} else {
+		log.Printf("job id=%s cover extracted seek=%d", job.JobID, seek)
+	}
+
 	if err := r.store.UploadDir(ctx, bucketOut, prefix, outDir); err != nil {
 		return err
 	}
@@ -114,6 +132,11 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 	playKey := prefix + "index.m3u8"
 	result.PlayKey = playKey
 	result.PlayURL = r.store.PublicURL(bucketOut, playKey)
+	if _, err := os.Stat(coverFile); err == nil {
+		coverKey := prefix + "cover.jpg"
+		result.CoverKey = coverKey
+		result.CoverURL = r.store.PublicURL(bucketOut, coverKey)
+	}
 	return nil
 }
 

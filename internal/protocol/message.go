@@ -37,7 +37,9 @@ type JobMessage struct {
 	Input         ObjectRef `json:"input"`
 	Output        OutputRef `json:"output"`
 	Profile       string    `json:"profile"`
-	CreatedAt     string    `json:"created_at,omitempty"`
+	// CoverSeekSec 封面截取秒数；<=0 时用 worker 配置默认值
+	CoverSeekSec int    `json:"cover_seek_sec,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
 }
 
 // ResultMessage 转码结果
@@ -49,6 +51,8 @@ type ResultMessage struct {
 	Status        string `json:"status"`
 	PlayKey       string `json:"play_key,omitempty"`
 	PlayURL       string `json:"play_url,omitempty"`
+	CoverKey      string `json:"cover_key,omitempty"`
+	CoverURL      string `json:"cover_url,omitempty"`
 	DurationSec   int    `json:"duration_sec,omitempty"`
 	Error         string `json:"error,omitempty"`
 	FinishedAt    string `json:"finished_at,omitempty"`

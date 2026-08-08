@@ -60,6 +60,31 @@ func (t *Transcoder) DurationSec(ctx context.Context, inputFile string) int {
 	return int(math.Round(sec))
 }
 
+// ExtractCover 从视频 seekSec 处截一帧 JPEG。
+func (t *Transcoder) ExtractCover(ctx context.Context, inputFile, outFile string, seekSec int) error {
+	if seekSec < 0 {
+		seekSec = 0
+	}
+	if err := os.MkdirAll(filepath.Dir(outFile), 0o755); err != nil {
+		return err
+	}
+	args := []string{
+		"-y",
+		"-ss", fmt.Sprintf("%d", seekSec),
+		"-i", inputFile,
+		"-frames:v", "1",
+		"-q:v", "2",
+		outFile,
+	}
+	cmd := exec.CommandContext(ctx, t.cfg.Bin, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg cover: %w", err)
+	}
+	return nil
+}
+
 // ToHLS 将 inputFile 转为 outDir/index.m3u8 + ts
 func (t *Transcoder) ToHLS(ctx context.Context, inputFile, outDir string) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
