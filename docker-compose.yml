@@ -1,0 +1,35 @@
+# 日常请用 mydocker 主编排启动（已并入）：
+#   cd /Users/wangdante/D/mydocker
+#   docker compose up -d --build my_transcode
+#
+# 本文件仅作备用（单独起服务时用）。网络名需与 mydocker 的 jarven 一致。
+
+services:
+  my_transcode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my_transcode:latest
+    container_name: my_transcode
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./configs/config.docker.yaml:/app/configs/config.yaml:ro
+      - transcode_work:/tmp/my_transcode
+    networks:
+      - jarven
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  jarven:
+    external: true
+    name: mydocker_jarven
+
+volumes:
+  transcode_work:

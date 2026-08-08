@@ -1,0 +1,10 @@
+.git
+.bin
+bin
+out_hls
+**/config.yaml
+**/.DS_Store
+*.md
+.idea
+.vscode
+temp

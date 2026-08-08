@@ -1,0 +1,37 @@
+# Docker 容器内配置：通过 Docker 网络访问同网的 kafka / minio 容器名
+# publicURL 仍用宿主机端口，方便浏览器播 HLS
+
+http:
+  addr: ":8088"
+
+workDir: "/tmp/my_transcode"
+
+kafka:
+  enabled: true
+  # mydocker 里 Bitnami Kafka：容器间用 INTERNAL 29092（宿主机映射仍是 9092）
+  brokers:
+    - "kafka:29092"
+  groupId: "my_transcode"
+  jobTopic: "media.transcode.jobs"
+  resultTopic: "media.transcode.results"
+
+minio:
+  enabled: true
+  # 容器内走 MinIO 内部端口 9000（宿主机映射是 19000）
+  endpoint: "minio:9000"
+  accessKey: "minioadmin"
+  secretKey: "minioadmin123"
+  useSSL: false
+  bucket: "my-media"
+  # 给客户端/浏览器的地址（宿主机访问）
+  publicURL: "http://127.0.0.1:19000"
+
+ffmpeg:
+  bin: "ffmpeg"
+  profile: "h264_hls"
+  preset: "veryfast"
+  crf: 23
+  hlsTime: 6
+
+debug:
+  allowSubmit: false

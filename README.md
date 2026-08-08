@@ -44,14 +44,35 @@ scripts/              本机 ffmpeg 试跑
 Dockerfile            含 ffmpeg 的运行镜像
 ```
 
-## 快速开始
+## Docker 常驻（推荐，不用 IDE 起）
+
+服务已并入 **`/Users/wangdante/D/mydocker/docker-compose.yml`**（网络 `jarven`，与 kafka/minio 同栈）。
+
+```bash
+# 方式 A：在 mydocker 目录
+cd /Users/wangdante/D/mydocker
+docker compose up -d --build my_transcode
+
+# 方式 B：在本仓库 make（内部仍调 mydocker）
+cd /Users/wangdante/D/kugou/my/my_transcode
+make docker-up
+
+curl http://127.0.0.1:8088/healthz
+make docker-logs    # 日志
+make docker-down    # 停止
+```
+
+容器内：`kafka:29092`（INTERNAL）、`minio:9000`；见 `configs/config.docker.yaml`。  
+`publicURL` 仍是 `http://127.0.0.1:19000`。
+
+**注意**：IDE 里若已起了 Worker，先停掉，避免抢 `8088` / consumer group。
+
+## 本机直接跑（开发）
 
 ```bash
 cp configs/config.example.yaml configs/config.yaml
 go mod tidy
-go run ./cmd/worker -config configs/config.yaml
-
-# 探活
+make run
 curl http://127.0.0.1:8088/healthz
 ```
 
@@ -60,7 +81,6 @@ curl http://127.0.0.1:8088/healthz
 ```bash
 ./scripts/transcode_local.sh /path/to/input.mp4 ./out_hls
 ```
-
 
 ## GoLand 运行
 
