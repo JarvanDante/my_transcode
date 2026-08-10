@@ -113,18 +113,20 @@ func (c *Client) UploadDir(ctx context.Context, bucket, prefix, localDir string)
 		prefix += "/"
 	}
 
-	entries, err := os.ReadDir(localDir)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	// 递归上传(多码率 HLS 会有 720p/ 480p/ 子目录)。对象 key 保留相对子路径。
+	return filepath.WalkDir(localDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		name := e.Name()
-		localPath := filepath.Join(localDir, name)
-		objectKey := prefix + name
-		f, err := os.Open(localPath)
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(localDir, path)
+		if err != nil {
+			return err
+		}
+		objectKey := prefix + filepath.ToSlash(rel)
+		f, err := os.Open(path)
 		if err != nil {
 			return err
 		}
@@ -134,14 +136,14 @@ func (c *Client) UploadDir(ctx context.Context, bucket, prefix, localDir string)
 			return err
 		}
 		_, err = c.client.PutObject(ctx, bucket, objectKey, f, st.Size(), miniogo.PutObjectOptions{
-			ContentType: contentTypeOf(name),
+			ContentType: contentTypeOf(rel),
 		})
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("put %s/%s: %w", bucket, objectKey, err)
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // UploadFile 上传单个本地文件（联调用）。

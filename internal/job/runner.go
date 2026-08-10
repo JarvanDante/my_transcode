@@ -104,9 +104,17 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 		result.DurationSec = dur
 		log.Printf("job id=%s duration_sec=%d", job.JobID, dur)
 	}
-	if err := r.ff.ToHLS(ctx, inFile, outDir); err != nil {
+	srcW, srcH := r.ff.Probe(ctx, inFile)
+	ladder := ffmpeg.DefaultLadder(srcH)
+	outs, err := r.ff.ToHLSMulti(ctx, inFile, outDir, srcW, srcH, ladder)
+	if err != nil {
 		return err
 	}
+	names := make([]string, 0, len(outs))
+	for _, o := range outs {
+		names = append(names, o.Name)
+	}
+	log.Printf("job id=%s src=%dx%d renditions=%v", job.JobID, srcW, srcH, names)
 
 	seek := job.CoverSeekSec
 	if seek <= 0 {
@@ -129,7 +137,7 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 		return err
 	}
 
-	playKey := prefix + "index.m3u8"
+	playKey := prefix + "master.m3u8"
 	result.PlayKey = playKey
 	result.PlayURL = r.store.PublicURL(bucketOut, playKey)
 	if _, err := os.Stat(coverFile); err == nil {

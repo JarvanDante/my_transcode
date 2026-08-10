@@ -17,6 +17,7 @@ import (
 type DepStatus struct {
 	Enabled   bool   `json:"enabled"`
 	Connected bool   `json:"connected"`
+	Consuming bool   `json:"consuming,omitempty"` // 仅 kafka 消费者用：消费循环是否存活
 	Error     string `json:"error,omitempty"`
 }
 
@@ -55,7 +56,7 @@ func (s *Server) healthz(c *gin.Context) {
 	if minioSt.Enabled && !minioSt.Connected {
 		ready = false
 	}
-	if kafkaSt.Enabled && !kafkaSt.Connected {
+	if kafkaSt.Enabled && (!kafkaSt.Connected || !kafkaSt.Consuming) {
 		ready = false
 	}
 
@@ -105,6 +106,11 @@ func (s *Server) checkKafka(ctx context.Context) DepStatus {
 		return st
 	}
 	st.Connected = true
+	// 关键：broker 可连不代表消费者在跑；反映真实消费循环状态。
+	st.Consuming = s.bus.Consuming()
+	if !st.Consuming {
+		st.Error = "consumer loop not active (reconnecting)"
+	}
 	return st
 }
 

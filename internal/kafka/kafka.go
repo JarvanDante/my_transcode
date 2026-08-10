@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
@@ -17,8 +18,9 @@ import (
 
 // Bus Kafka 生产/消费。
 type Bus struct {
-	cfg    config.KafkaConfig
-	writer *kafkago.Writer
+	cfg       config.KafkaConfig
+	writer    *kafkago.Writer
+	consuming atomic.Bool // 消费循环是否存活（有活跃 reader）
 }
 
 func New(cfg config.KafkaConfig) *Bus {
@@ -42,6 +44,9 @@ func New(cfg config.KafkaConfig) *Bus {
 }
 
 func (b *Bus) Enabled() bool { return b.cfg.Enabled }
+
+// Consuming 消费循环是否存活（用于 healthz 真实反映消费者状态）。
+func (b *Bus) Consuming() bool { return b.consuming.Load() }
 
 func (b *Bus) Close() error {
 	if b.writer != nil {
@@ -144,7 +149,10 @@ func (b *Bus) PublishResult(ctx context.Context, msg protocol.ResultMessage) err
 	})
 }
 
-// ConsumeJobs 阻塞消费任务。
+// ConsumeJobs 阻塞消费任务；断线自动重连，只有 ctx 取消才退出。
+// 之前的实现在任意 FetchMessage 出错时直接 return，消费者会永久退出
+// （典型场景：worker 早于 kafka DNS 就绪启动，一次 no-such-host 后再不消费），
+// 这里改为外层重连循环 + 指数退避，彻底根治“断一次就再也不消费”。
 func (b *Bus) ConsumeJobs(ctx context.Context, handler func(context.Context, protocol.JobMessage) error) error {
 	if !b.cfg.Enabled {
 		log.Println("kafka: disabled, skip consumer")
@@ -161,6 +169,41 @@ func (b *Bus) ConsumeJobs(ctx context.Context, handler func(context.Context, pro
 		group = "my_transcode"
 	}
 
+	const (
+		minBackoff = 2 * time.Second
+		maxBackoff = 30 * time.Second
+	)
+	backoff := minBackoff
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		err := b.consumeOnce(ctx, topic, group, handler)
+		b.consuming.Store(false)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		log.Printf("kafka: consumer loop exited: %v; reconnect in %s", err, backoff)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
+}
+
+// consumeOnce 建立一个 reader 并消费，直到出错或 ctx 取消才返回；
+// 返回后由 ConsumeJobs 负责关闭旧 reader（defer）并退避重连。
+func (b *Bus) consumeOnce(ctx context.Context, topic, group string, handler func(context.Context, protocol.JobMessage) error) error {
 	r := kafkago.NewReader(kafkago.ReaderConfig{
 		Brokers:        b.cfg.Brokers,
 		GroupID:        group,
@@ -172,6 +215,8 @@ func (b *Bus) ConsumeJobs(ctx context.Context, handler func(context.Context, pro
 	})
 	defer r.Close()
 
+	// 有活跃 reader 即视为在消费（空闲 FetchMessage 阻塞期间保持存活）。
+	b.consuming.Store(true)
 	log.Printf("kafka: consuming topic=%s group=%s brokers=%s", topic, group, strings.Join(b.cfg.Brokers, ","))
 
 	for {
