@@ -35,6 +35,10 @@ ffmpeg:
   hlsTime: 6
   coverSeekSec: 8
 
+# 封面 AES-128-ECB, 必须 16 字节, 与 H5 VITE_AES_BNC_KEY 相同
+image_aes:
+  key: "525202f9149e061d"
+
 # 本地调试：允许 POST /debug/jobs（生产务必 false）
 debug:
   allowSubmit: true

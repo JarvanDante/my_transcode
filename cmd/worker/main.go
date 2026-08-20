@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"my_transcode/internal/aesbnc"
 	"my_transcode/internal/config"
 	"my_transcode/internal/ffmpeg"
 	"my_transcode/internal/httpapi"
@@ -30,6 +31,8 @@ func main() {
 			log.Fatalf("load config: %v", err)
 		}
 	}
+
+	aesbnc.SetKey(cfg.ImageAES.Key)
 
 	if err := os.MkdirAll(cfg.WorkDir, 0o755); err != nil {
 		log.Fatalf("workDir: %v", err)

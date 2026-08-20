@@ -12,8 +12,9 @@ type Config struct {
 	WorkDir string       `yaml:"workDir"`
 	Kafka   KafkaConfig  `yaml:"kafka"`
 	Minio   MinioConfig  `yaml:"minio"`
-	FFmpeg  FFmpegConfig `yaml:"ffmpeg"`
-	Debug   DebugConfig  `yaml:"debug"`
+	FFmpeg   FFmpegConfig   `yaml:"ffmpeg"`
+	Debug    DebugConfig    `yaml:"debug"`
+	ImageAES ImageAESConfig `yaml:"image_aes"`
 }
 
 type HTTPConfig struct {
@@ -49,6 +50,10 @@ type FFmpegConfig struct {
 
 type DebugConfig struct {
 	AllowSubmit bool `yaml:"allowSubmit"`
+}
+
+type ImageAESConfig struct {
+	Key string `yaml:"key"`
 }
 
 func Load(path string) (*Config, error) {

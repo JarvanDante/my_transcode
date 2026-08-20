@@ -4,15 +4,27 @@ package aesbnc
 import (
 	"crypto/aes"
 	"errors"
+	"strings"
 )
 
-const Key = "525202f9149e061d"
+const DefaultKey = "525202f9149e061d"
+
+var activeKey = DefaultKey
+
+func SetKey(k string) {
+	k = strings.TrimSpace(k)
+	if len(k) != aes.BlockSize {
+		activeKey = DefaultKey
+		return
+	}
+	activeKey = k
+}
 
 func Encrypt(plain []byte) ([]byte, error) {
 	if plain == nil {
 		plain = []byte{}
 	}
-	block, err := aes.NewCipher([]byte(Key))
+	block, err := aes.NewCipher([]byte(activeKey))
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +50,7 @@ func Decrypt(data []byte) ([]byte, error) {
 	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
 		return nil, errors.New("密文长度无效")
 	}
-	block, err := aes.NewCipher([]byte(Key))
+	block, err := aes.NewCipher([]byte(activeKey))
 	if err != nil {
 		return nil, err
 	}
