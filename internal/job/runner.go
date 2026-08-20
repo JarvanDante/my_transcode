@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"my_transcode/internal/aesbnc"
 	"my_transcode/internal/config"
 	"my_transcode/internal/ffmpeg"
 	"my_transcode/internal/minio"
@@ -133,6 +134,19 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 		log.Printf("job id=%s cover extracted seek=%d", job.JobID, seek)
 	}
 
+	if _, err := os.Stat(coverFile); err == nil {
+		plain, err := os.ReadFile(coverFile)
+		if err != nil {
+			log.Printf("job id=%s cover read failed: %v", job.JobID, err)
+		} else if enc, err := aesbnc.Encrypt(plain); err != nil {
+			log.Printf("job id=%s cover encrypt failed: %v", job.JobID, err)
+		} else if err := os.WriteFile(filepath.Join(outDir, "cover.bnc"), enc, 0644); err != nil {
+			log.Printf("job id=%s cover.bnc write failed: %v", job.JobID, err)
+		} else if err := os.Remove(coverFile); err != nil {
+			log.Printf("job id=%s cover.jpg remove failed: %v", job.JobID, err)
+		}
+	}
+
 	if err := r.store.UploadDir(ctx, bucketOut, prefix, outDir); err != nil {
 		return err
 	}
@@ -140,8 +154,8 @@ func (r *Runner) run(ctx context.Context, job protocol.JobMessage, result *proto
 	playKey := prefix + "master.m3u8"
 	result.PlayKey = playKey
 	result.PlayURL = r.store.PublicURL(bucketOut, playKey)
-	if _, err := os.Stat(coverFile); err == nil {
-		coverKey := prefix + "cover.jpg"
+	if _, err := os.Stat(filepath.Join(outDir, "cover.bnc")); err == nil {
+		coverKey := prefix + "cover.bnc"
 		result.CoverKey = coverKey
 		result.CoverURL = r.store.PublicURL(bucketOut, coverKey)
 	}
