@@ -205,13 +205,16 @@ func (b *Bus) ConsumeJobs(ctx context.Context, handler func(context.Context, pro
 // 返回后由 ConsumeJobs 负责关闭旧 reader（defer）并退避重连。
 func (b *Bus) consumeOnce(ctx context.Context, topic, group string, handler func(context.Context, protocol.JobMessage) error) error {
 	r := kafkago.NewReader(kafkago.ReaderConfig{
-		Brokers:        b.cfg.Brokers,
-		GroupID:        group,
-		Topic:          topic,
-		MinBytes:       1,
-		MaxBytes:       10e6,
-		CommitInterval: time.Second,
-		StartOffset:    kafkago.FirstOffset,
+		Brokers:           b.cfg.Brokers,
+		GroupID:           group,
+		Topic:             topic,
+		MinBytes:          1,
+		MaxBytes:          10e6,
+		CommitInterval:    0, // 只在 Handle 结束后手动 commit，避免长任务中途被当成已消费后又重投
+		StartOffset:       kafkago.FirstOffset,
+		HeartbeatInterval: 10 * time.Second,
+		SessionTimeout:    45 * time.Minute, // 70 分钟片子转 720p+480p 可能超过默认 30s
+		RebalanceTimeout:  60 * time.Second,
 	})
 	defer r.Close()
 

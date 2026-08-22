@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"my_transcode/internal/aesbnc"
@@ -27,6 +28,7 @@ type Runner struct {
 	store *minio.Client
 	ff    *ffmpeg.Transcoder
 	pub   ResultPublisher
+	seen  sync.Map // job_id → struct{}，进程内去重，挡住 Kafka 重投
 }
 
 func New(cfg *config.Config, store *minio.Client, ff *ffmpeg.Transcoder, pub ResultPublisher) *Runner {
@@ -34,6 +36,12 @@ func New(cfg *config.Config, store *minio.Client, ff *ffmpeg.Transcoder, pub Res
 }
 
 func (r *Runner) Handle(ctx context.Context, job protocol.JobMessage) error {
+	if job.JobID != "" {
+		if _, loaded := r.seen.LoadOrStore(job.JobID, struct{}{}); loaded {
+			log.Printf("job skip duplicate id=%s (already handled in this process)", job.JobID)
+			return nil
+		}
+	}
 	log.Printf("job start id=%s ref=%s key=%s", job.JobID, job.BizRef, job.Input.Key)
 
 	result := protocol.ResultMessage{
