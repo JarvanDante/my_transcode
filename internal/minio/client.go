@@ -2,8 +2,10 @@ package minio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"os"
 	"path/filepath"
@@ -14,6 +16,11 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"my_transcode/internal/config"
+)
+
+const (
+	putAttempts = 5
+	putBackoff  = 400 * time.Millisecond
 )
 
 // Client MinIO 读写封装。
@@ -126,23 +133,7 @@ func (c *Client) UploadDir(ctx context.Context, bucket, prefix, localDir string)
 			return err
 		}
 		objectKey := prefix + filepath.ToSlash(rel)
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		st, err := f.Stat()
-		if err != nil {
-			f.Close()
-			return err
-		}
-		_, err = c.client.PutObject(ctx, bucket, objectKey, f, st.Size(), miniogo.PutObjectOptions{
-			ContentType: contentTypeOf(rel),
-		})
-		f.Close()
-		if err != nil {
-			return fmt.Errorf("put %s/%s: %w", bucket, objectKey, err)
-		}
-		return nil
+		return c.putFile(ctx, bucket, objectKey, path)
 	})
 }
 
@@ -154,19 +145,68 @@ func (c *Client) UploadFile(ctx context.Context, bucket, key, localPath string) 
 	if err := c.EnsureBucket(ctx, bucket); err != nil {
 		return err
 	}
-	f, err := os.Open(localPath)
-	if err != nil {
-		return err
+	return c.putFile(ctx, bucket, key, localPath)
+}
+
+// putFile 用 FPutObject 每次打开新文件句柄，避免 PutObject 内部重试时 Reader 已读过、
+// Content-Length 对不上。瞬时网络错误按文件退避重试，不把整单 HLS 上传打翻。
+func (c *Client) putFile(ctx context.Context, bucket, key, localPath string) error {
+	opts := miniogo.PutObjectOptions{ContentType: contentTypeOf(localPath)}
+	var last error
+	for i := 1; i <= putAttempts; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		_, err := c.client.FPutObject(ctx, bucket, key, localPath, opts)
+		if err == nil {
+			if i > 1 {
+				log.Printf("minio: put %s/%s ok on retry %d", bucket, key, i)
+			}
+			return nil
+		}
+		last = err
+		if !isTransientPutErr(err) || i == putAttempts {
+			break
+		}
+		wait := putBackoff * time.Duration(i)
+		log.Printf("minio: put %s/%s failed (attempt %d/%d): %v; retry in %s", bucket, key, i, putAttempts, err, wait)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
 	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		return err
+	return fmt.Errorf("put %s/%s: %w", bucket, key, last)
+}
+
+func isTransientPutErr(err error) bool {
+	if err == nil {
+		return false
 	}
-	_, err = c.client.PutObject(ctx, bucket, key, f, st.Size(), miniogo.PutObjectOptions{
-		ContentType: contentTypeOf(localPath),
-	})
-	return err
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, p := range []string{
+		"content-length",
+		"connection reset",
+		"broken pipe",
+		"unexpected eof",
+		"i/o timeout",
+		"tls handshake timeout",
+		"slowdown",
+		"please try again",
+		"connection refused",
+		"use of closed network connection",
+		"http2: server sent goaway",
+		"503",
+		"429",
+	} {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // PublicURL 拼公开访问地址。
