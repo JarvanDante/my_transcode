@@ -212,8 +212,10 @@ func (b *Bus) consumeOnce(ctx context.Context, topic, group string, handler func
 		MaxBytes:          10e6,
 		CommitInterval:    0, // 只在 Handle 结束后手动 commit，避免长任务中途被当成已消费后又重投
 		StartOffset:       kafkago.FirstOffset,
+		// SessionTimeout 必须落在 broker group.min/max.session.timeout.ms 内（常见上限 5m）。
+		// 长转码靠后台 heartbeat 保活，不要把 SessionTimeout 设成整片耗时。
 		HeartbeatInterval: 10 * time.Second,
-		SessionTimeout:    45 * time.Minute, // 70 分钟片子转 720p+480p 可能超过默认 30s
+		SessionTimeout:    45 * time.Second,
 		RebalanceTimeout:  60 * time.Second,
 	})
 	defer r.Close()
