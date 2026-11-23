@@ -28,3 +28,8 @@ coverage.out
 
 # m3u8/ts
 /out_hls
+
+# 构建产物与编译输出
+dist/
+/my_transcode
+/worker
